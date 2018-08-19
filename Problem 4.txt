@@ -1,0 +1,154 @@
+#include <opencv2/opencv.hpp>
+using namespace cv;
+using namespace std;
+int main()
+{
+	VideoCapture video1(0);
+	video1.set(CV_CAP_PROP_FRAME_WIDTH, 300);
+	video1.set(CV_CAP_PROP_FRAME_HEIGHT, 300);
+	VideoCapture video2(1);
+	video2.set(CV_CAP_PROP_FRAME_WIDTH, 300);
+	video2.set(CV_CAP_PROP_FRAME_HEIGHT, 300);
+	VideoCapture video3(2);
+	video3.set(CV_CAP_PROP_FRAME_WIDTH, 300);
+	video3.set(CV_CAP_PROP_FRAME_HEIGHT, 300);
+
+	VideoWriter video("PS4/Map.mp4", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(900, 900));
+	VideoWriter v1("PS4/v1.mp4", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(300, 300));
+	VideoWriter v2("PS4/v2.mp4", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(300, 300));
+	VideoWriter v3("PS4/v3.mp4", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(300, 300));
+	Mat image1, imageT1, image2, imageT2, image3, imageT3;
+	Mat Result = imread("PS4/Map.jpg");
+	int init = 1, prevX, prevY, nextX, nextY;
+	int LR = 0, HR = 56, LG = 58, HG = 93, LB = 141, HB = 210;
+
+	namedWindow("Video1");
+	cvResizeWindow("Video1", 300, 300);
+	namedWindow("Video2");
+	cvResizeWindow("Video2", 300, 300);
+	namedWindow("Video3");
+	cvResizeWindow("Video3", 300, 300);
+
+	namedWindow("Control");
+	namedWindow("Map");
+	cvResizeWindow("Map", 900, 900);
+
+	while (1)
+	{
+		video1 >> image1;
+		if (image1.empty())
+			break;
+		video2 >> image2;
+		if (image2.empty())
+			break;
+		video3 >> image3;
+		if (image3.empty())
+			break;
+		cvCreateTrackbar("LRed", "Control", &LR, 255);
+		cvCreateTrackbar("HRed", "Control", &HR, 255);
+		cvCreateTrackbar("LGreen", "Control", &LG, 255);
+		cvCreateTrackbar("HGreen", "Control", &HG, 255);
+		cvCreateTrackbar("LBlue", "Control", &LB, 255);
+		cvCreateTrackbar("HBlue", "Control", &HB, 255);
+
+		inRange(image1, Scalar(LB, LG, LR), Scalar(HB, HG, HR), imageT1);
+
+		erode(imageT1, imageT1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		dilate(imageT1, imageT1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		dilate(imageT1, imageT1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		erode(imageT1, imageT1, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+
+		inRange(image2, Scalar(LB, LG, LR), Scalar(HB, HG, HR), imageT2);
+
+		erode(imageT2, imageT2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		dilate(imageT2, imageT2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		dilate(imageT2, imageT2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		erode(imageT2, imageT2, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+
+		inRange(image3, Scalar(LB, LG, LR), Scalar(HB, HG, HR), imageT3);
+
+		erode(imageT3, imageT3, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		dilate(imageT3, imageT3, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		dilate(imageT3, imageT3, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		erode(imageT3, imageT3, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+
+		Moments oMoments1 = moments(imageT1);
+
+		double dM011 = oMoments1.m01;
+		double dM101 = oMoments1.m10;
+		double dArea1 = oMoments1.m00;
+		if (dArea1 > 500)
+		{
+			if (init == 1)
+			{
+				prevX = 300 + dM101 / dArea1;
+				prevY = dM011 / dArea1;
+			}
+			else
+			{
+				nextX = 300 + dM101 / dArea1;
+				nextY = dM011 / dArea1;
+			}
+		}
+
+		Moments oMoments2 = moments(imageT2);
+
+		double dM012 = oMoments2.m01;
+		double dM102 = oMoments2.m10;
+		double dArea2 = oMoments2.m00;
+		if (dArea2 > 500)
+		{
+			if (init == 1)
+			{
+				prevX = 600 + dM102 / dArea2;
+				prevY = 300 + dM012 / dArea2;
+			}
+			else
+			{
+				nextX = 600 + dM102 / dArea2;
+				nextY = 300 + dM012 / dArea2;
+			}
+		}
+
+		Moments oMoments3 = moments(imageT3);
+
+		double dM013 = oMoments3.m01;
+		double dM103 = oMoments3.m10;
+		double dArea3 = oMoments3.m00;
+		if (dArea3 > 500)
+		{
+			if (init == 1)
+			{
+				prevX = 300 + dM103 / dArea3;
+				prevY = 600 + dM013 / dArea3;
+			}
+			else
+			{
+				nextX = 300 + dM103 / dArea3;
+				nextY = 600 + dM013 / dArea3;
+			}
+		}
+
+		if (init != 1 && prevX != nextX)
+		{
+			line(Result, Point(prevX, prevY), Point(nextX, nextY), Scalar(0, 255, 0), 3, 8, 0);
+			prevX = nextX;
+			prevY = nextY;
+		}
+
+		if (init == 1)
+			init++;
+		v1.write(image1);
+		v2.write(image2);
+		v3.write(image3);
+		video.write(Result);
+		imshow("Video1", image1);
+		imshow("Video2", image2);
+		imshow("Video3", image3);
+		imshow("Map", Result);
+		char ch = waitKey(1);
+		if (ch == 27)
+			break;
+	}
+	return 1;
+}

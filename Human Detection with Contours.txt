@@ -1,0 +1,36 @@
+#include <opencv2/opencv.hpp>
+
+int main()
+{
+	using namespace cv;
+	using namespace std;
+	Mat frame;
+	Mat fore;
+	
+	VideoCapture cap1("vtest.avi");
+	Ptr<BackgroundSubtractorMOG2> bg = createBackgroundSubtractorMOG2();
+	vector < vector < Point > >contours;
+	namedWindow("Rectangle");
+	while (1)
+	{
+		cap1 >> frame;
+		bg->apply(frame, fore);
+		findContours(fore, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+
+		Scalar color = Scalar(0, 255, 0);
+		vector<Rect> boundRect(contours.size());
+
+		for (int i = 0; i < contours.size(); i++)
+		{
+			boundRect[i] = boundingRect(contours[i]);
+			if (boundRect[i].width >= 50 && boundRect[i].height >= 50)
+				rectangle(frame, boundRect[i].tl(), boundRect[i].br(), color, 2, 0);
+		}
+
+		imshow("Rectangle", frame);
+		char c = (char)waitKey(90);
+		if (c == 27)
+			break;
+	}
+	return 1;
+}

@@ -1,0 +1,102 @@
+import cv2
+
+img=cv2.imread("Lenna.jpg")
+cv2.imshow("Image",img)
+cv2.waitKey(0)
+
+
+
+import cv2
+
+cap=cv2.VideoCapture("vtest.avi")
+
+while(cap.isOpened()):
+    ret,img=cap.read()
+    cv2.imshow("Video",img)
+    ch = cv2.waitKey(1)
+    if ch==27:
+        break
+
+
+
+import cv2
+
+cap=cv2.VideoCapture("vtest.avi")
+hog=cv2.HOGDescriptor()
+hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+
+while(cap.isOpened()):
+    ret,frame=cap.read()
+    found,w=hog.detectMultiScale(frame,hitThreshold=0,winStride=(8,8),padding=(0,0),scale=1.02,useMeanshiftGrouping=1)
+    
+    for x,y,w,h in found:
+        padw,padh=int(0.15*w),int(0.05*h)
+        cv2.rectangle(frame,(x+padw, y+padh),(x+w-padw, y+h-padh),(255,0,0),2)
+    
+    cv2.imshow("Video",frame)
+    ch = cv2.waitKey(1)
+    if ch==27:
+        break
+
+
+import cv2
+import numpy as np
+import sys
+
+cascPath = sys.argv[1]
+faceCascade = cv2.CascadeClassifier(cascPath)
+
+lower = np.array([0, 48, 80], dtype = "uint8")
+upper = np.array([20, 255, 255], dtype = "uint8")
+
+video_capture = cv2.VideoCapture(0)
+
+def face_detect():
+    while True:
+        # Capture frame-by-frame
+        ret, frame = video_capture.read()
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        faces = faceCascade.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(30, 30),
+            flags=cv2.CASCADE_SCALE_IMAGE
+        )
+
+        # Draw a rectangle around the faces
+        for (x, y, w, h) in faces:
+            #face_region = cv2.GetSubRect(image,(x, y, x+w, y+h))
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            face_region = frame[y:y+h, x:x+w]
+            converted = cv2.cvtColor(face_region, cv2.COLOR_BGR2HSV)
+            skinMask = cv2.inRange(converted, lower, upper)
+
+            # apply a series of erosions and dilations to the mask
+            # using an elliptical kernel
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+            skinMask = cv2.erode(skinMask, kernel, iterations = 2)
+            skinMask = cv2.dilate(skinMask, kernel, iterations = 2)
+
+            # blur the mask to help remove noise, then apply the
+            # mask to the frame
+            skinMask = cv2.GaussianBlur(skinMask, (3, 3), 0)
+            skin = cv2.bitwise_and(face_region, face_region, mask = skinMask)
+
+            cv2.imshow("Face", np.hstack([face_region, skin]))
+
+            # Further processing on only the face without the background.
+
+            #cv2.ellipse(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
+        # Display the resulting frame
+        cv2.imshow('Video', frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            return
+
+face_detect()
+video_capture.release()
+cv2.destroyAllWindows()

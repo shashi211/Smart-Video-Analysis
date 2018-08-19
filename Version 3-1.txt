@@ -1,0 +1,51 @@
+#include "opencv2/objdetect.hpp"
+#include "opencv2/videoio.hpp"
+#include "opencv2/highgui.hpp"
+#include "opencv2/imgproc.hpp"
+#include <iostream>
+#include <stdio.h>
+using namespace std;
+using namespace cv;
+CascadeClassifier face_cascade;
+int main(int argc, const char** argv)
+{
+	VideoCapture cap(0);
+	cap.set(CAP_PROP_FRAME_WIDTH, 640);
+	cap.set(CAP_PROP_FRAME_HEIGHT, 480);
+	Mat img,imgT;
+	face_cascade.load("cascade/cascade.xml");
+	while (1)
+	{
+		cap >> img;
+		if (img.empty())
+			break;
+		inRange(img, Scalar(0, 0, 0), Scalar(10, 10, 10), imgT);
+		Moments oMoments = moments(imgT);
+		double dM01 = oMoments.m01;
+		double dM10 = oMoments.m10;
+		double dArea = oMoments.m00;
+		if (dArea > 30000000)
+		{
+			Rect border(20, 20, 600, 440);
+			rectangle(img, border, Scalar(0, 255, 0), 2);
+		}
+		vector<Rect> faces;
+		face_cascade.detectMultiScale(img, faces, 1.1, 2, 0 | CASCADE_SCALE_IMAGE, Size(30, 30));
+		for (size_t i = 0; i < faces.size(); i++)
+		{
+			Rect r = faces[i];
+			if (r.height >150 && r.width >150)
+			{
+				r.x += cvRound(r.width*0.1);
+				r.width = cvRound(r.width*0.8);
+				r.y += cvRound(r.height*0.06);
+				r.height = cvRound(r.height*0.9);
+				rectangle(img, r.tl(), r.br(), cv::Scalar(255, 0, 0), 2);
+			}
+		}
+		imshow("Mask", img);
+		char c = (char)waitKey(10);
+		if (c == 27) break;
+	}
+	return 0;
+}

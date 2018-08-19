@@ -1,0 +1,68 @@
+#include <opencv2\opencv.hpp>
+#include <vector>
+
+using namespace cv;
+using namespace std;
+
+int main()
+{
+	Mat img1 = imread("a.jpg");
+	Mat img2 = imread("b.jpg");
+	Mat imggray1, imggray2;
+	cvtColor(img1, imggray1, CV_BGR2GRAY);
+	cvtColor(img2, imggray2, CV_BGR2GRAY);
+	Ptr<FeatureDetector> detector = ORB::create();
+	vector<KeyPoint> keypointsPrev, keypointsNext;
+	detector->detect(img1, keypointsPrev);
+	detector->detect(img2, keypointsNext);
+
+	//Mat outimg1, outimg2;
+	//drawKeypoints(imggray1, keypointsPrev, outimg1);
+	//drawKeypoints(imggray2, keypointsNext, outimg2);
+
+	Ptr<DescriptorExtractor> extractor = ORB::create();
+	Mat descriptorsPrev, descriptorsNext;
+	extractor->compute(imggray1, keypointsPrev, descriptorsPrev);
+	extractor->compute(imggray2, keypointsNext, descriptorsNext);
+	
+	descriptorsPrev.convertTo(descriptorsPrev, CV_32F);
+	descriptorsNext.convertTo(descriptorsNext, CV_32F);
+
+	FlannBasedMatcher matcher;
+	vector<DMatch> matches;
+	matcher.match(descriptorsPrev, descriptorsNext, matches);
+
+	vector<DMatch> goodMatches;
+	int mindist = imggray1.rows / 100 * 10;
+	for (int i = 0; i < descriptorsPrev.rows; i++)
+	{
+		if (matches[i].distance < 3 * mindist)
+		{
+			goodMatches.push_back(matches[i]);
+		}
+	}
+
+	Mat result;
+	drawMatches(img1, keypointsPrev, img2, keypointsNext, goodMatches, result, Scalar(0, 255, 0), Scalar(255, 0, 0), vector<char>(), 0);
+	/*
+	vector< Point2f > Prev,Next;
+	for (int i = 0; i < goodMatches.size(); i++)
+	{
+		//-- Get the keypoints from the good matches
+		Prev.push_back(keypointsPrev[goodMatches[i].queryIdx].pt);
+		Next.push_back(keypointsNext[goodMatches[i].trainIdx].pt);
+	}
+	
+	Mat H = findHomography(Prev, Next, CV_RANSAC);
+	// Use the Homography Matrix to warp the images
+	cv::Mat result;
+	warpPerspective(img1, result, H, Size(img1.cols + img2.cols, img1.rows));
+	cv::Mat half(result, cv::Rect(0, 0, img2.cols, img2.rows));
+	img2.copyTo(half);
+	imshow("Result", result);
+	*/
+	//imshow("Img1", outimg1);
+	//imshow("Img2", outimg2);
+	imshow("Img", result);
+	waitKey(0);
+}

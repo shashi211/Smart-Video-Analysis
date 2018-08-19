@@ -1,0 +1,134 @@
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/stitching.hpp>
+#include <iostream>
+#include <vector>
+
+using namespace std;
+using namespace cv;
+
+void edgeDetect(float x1, float y1, float x2, float y2, int *le, int *re)
+{
+	float mx, x, temp;
+	int i;
+	if ((y2 - y1)<0)
+	{
+		temp = y1; y1 = y2; y2 = temp;
+		temp = x1; x1 = x2; x2 = temp;
+	}
+	if ((y2 - y1) != 0)
+		mx = (x2 - x1) / (y2 - y1);
+	else
+		mx = x2 - x1;
+	x = x1;
+	for (i = y1; i <= y2; i++)
+	{
+		if (x<(float)le[i])
+			le[i] = (int)x;
+		if (x>(float)re[i])
+			re[i] = (int)x;
+		x += mx;
+	}
+}
+
+int main()
+{
+	int x, y;
+	VideoCapture cap1("Input 2b.mp4");
+	VideoCapture cap2("Input 2a.mp4");
+
+	Stitcher stitcher = Stitcher::createDefault();
+
+	HOGDescriptor hog;
+	hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
+	namedWindow("Vid1");
+	namedWindow("Vid2");
+	namedWindow("Panorama");
+
+	int frame_width = cap1.get(CV_CAP_PROP_FRAME_WIDTH);
+	int frame_height = cap1.get(CV_CAP_PROP_FRAME_HEIGHT);
+	VideoWriter video1("Output1.mp4", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(frame_width, frame_height));
+	VideoWriter video2("Output2.mp4", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(frame_width, frame_height));
+
+	while (1)
+	{
+		Mat img1, img2;
+		Mat pano;
+		vector<Mat> imgs;
+
+		cap1 >> img1;
+		cap2 >> img2;
+		if (img1.empty() || img2.empty())
+			break;
+
+		video1.write(img1);
+		video2.write(img2);
+		imgs.push_back(img1);
+		imgs.push_back(img2);
+
+		Stitcher::Status status = stitcher.stitch(imgs, pano);
+
+		if (status != Stitcher::OK)
+		{
+			cout << "Error stitching - Code: " << int(status) << endl;
+			return -1;
+		}
+		float x1=100,y1=100, x2=700, y2=100, x3=700, y3=500, x4=400, y4=500, x5=400, y5=300;
+		Scalar color = Scalar(0, 255, 0);
+		line(pano, Point(100,100), Point(700,100), color, 2, 8, 0);
+		line(pano, Point(700,100), Point(700,500), color, 2, 8, 0);
+		line(pano, Point(700,500), Point(400,500), color, 2, 8, 0);
+		line(pano, Point(400,500), Point(400,300), color, 2, 8, 0);
+		line(pano, Point(400,300), Point(100,100), color, 2, 8, 0);
+
+		int le[800], re[800];
+		int n, y;
+		for (n = 0; n<800; n++)
+		{
+			le[n] = 1000;
+			re[n] = 0;
+		}
+		edgeDetect(x1, y1, x2, y2, le, re);
+		edgeDetect(x2, y2, x3, y3, le, re);
+		edgeDetect(x3, y3, x4, y4, le, re);
+		edgeDetect(x4, y4, x5, y5, le, re);
+		edgeDetect(x5, y5, x1, y1, le, re);
+			
+		vector<Rect> found, found_filtered;
+		hog.detectMultiScale(pano, found, 0, Size(8, 8), Size(32, 32), 1.2, 2);
+		size_t i, j;
+		for (i = 0; i<found.size(); i++)
+		{
+			Rect r = found[i];
+			for (j = 0; j<found.size(); j++)
+				if (j != i && (r & found[j]) == r)
+					break;
+			if (j == found.size())
+				found_filtered.push_back(r);
+		}
+		for (i = 0; i < found_filtered.size(); i++)
+		{
+			Rect r = found_filtered[i];
+			y = r.y;
+			x = r.x;
+			if (le[y]<re[y] && x > le[y] && x < re[y])
+			{
+				r.x += cvRound(r.width*0.1);
+				r.width = cvRound(r.width*0.8);
+				r.y += cvRound(r.height*0.06);
+				r.height = cvRound(r.height*0.9);
+				rectangle(pano, r.tl(), r.br(), cv::Scalar(255, 0, 0), 2);
+			}
+		}
+
+		imshow("Vid1", img1);
+		imshow("Vid2", img2);
+		imshow("Panorama", pano);
+		imgs.pop_back();
+		imgs.pop_back();
+		char ch = waitKey(60);
+		if (ch == 27)
+			break;
+	}
+	return 0;
+}

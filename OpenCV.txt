@@ -1,0 +1,172 @@
+dlib
+ximgproc		advanced ip algo
+highgui		UI
+(x)objectdetect	object detection
+optical flow algorithms
+
+OpenCV 3 comes with a new tracking API that contains implementations of many single object tracking algorithms.
+6 available trackers in OpenCV3 
+BOOSTING, MIL, KCF, TLD, MEDIANFLOW, and GOTURN.
+
+cvMoveWindow(windowname,x,y)
+
+putText(img, "Mask", Point(r.x, (r.y - 10)), CV_FONT_HERSHEY_COMPLEX_SMALL, 1.5, Scalar(0, 255, 0), 2, 8, false);
+
+Image
+	Mat image = imread("Lenna.jpg");  
+	imshow("lenna", image);                   
+
+	waitKey(0); 
+	
+	
+Video File	
+	VideoCapture cap("BBT.mp4");
+	while (1) 
+	{
+		Mat frame;
+		cap >> frame;
+		if (frame.empty())
+			break;
+		imshow("Frame", frame);	
+		char c = (char)waitKey(30);
+		if (c == 27)
+			break;
+	}
+	cap.release();
+	
+Video Capture
+	VideoCapture stream(0);
+	while (true) 
+	{
+		Mat cameraFrame;
+		stream.read(cameraFrame);
+		imshow("cam", cameraFrame);
+		char c = (char)waitKey(30);
+		if (c == 27)
+			break;
+	}
+
+Face Detect
+#include "opencv2/objdetect.hpp"
+#include "opencv2/videoio.hpp"
+#include "opencv2/highgui.hpp"
+#include "opencv2/imgproc.hpp"
+#include <iostream>
+#include <stdio.h>
+using namespace std;
+using namespace cv;
+String face_cascade_name, eyes_cascade_name;
+CascadeClassifier face_cascade,eyes_cascade;
+String window_name = "Capture - Face detection";
+int main(int argc, const char** argv)
+{
+	VideoCapture capture;
+	Mat frame;
+	
+	face_cascade.load("cascade/haarcascade_frontalface_alt.xml");
+	eyes_cascade.load("cascade/haarcascade_eye_tree_eyeglasses.xml");
+	
+	capture.open(0);
+	while (capture.read(frame))
+	{
+		vector<Rect> faces;
+		Mat frame_gray;
+		cvtColor(frame, frame_gray, COLOR_BGR2GRAY);
+		equalizeHist(frame_gray, frame_gray);
+		face_cascade.detectMultiScale(frame_gray, faces, 1.1, 2, 0 | CASCADE_SCALE_IMAGE, Size(30, 30));
+		for (size_t i = 0; i < faces.size(); i++)
+		{
+			Point center(faces[i].x + faces[i].width / 2, faces[i].y + faces[i].height / 2);
+			ellipse(frame, center, Size(faces[i].width / 2, faces[i].height / 2), 0, 0, 360, Scalar(255, 0, 255), 4, 8, 0);
+			Mat faceROI = frame_gray(faces[i]);
+			vector<Rect> eyes;
+			
+			eyes_cascade.detectMultiScale(faceROI, eyes, 1.1, 2, 0 | CASCADE_SCALE_IMAGE, Size(30, 30));
+			for (size_t j = 0; j < eyes.size(); j++)
+			{
+				Point eye_center(faces[i].x + eyes[j].x + eyes[j].width / 2, faces[i].y + eyes[j].y + eyes[j].height / 2);
+				int radius = cvRound((eyes[j].width + eyes[j].height)*0.25);
+				circle(frame, eye_center, radius, Scalar(255, 0, 0), 4, 8, 0);
+			}
+		}
+		imshow(window_name, frame);
+		char c = (char)waitKey(10);
+		if (c == 27) break; 
+	}
+	return 0;
+}
+
+
+Human Detection In Image
+	Mat img = imread("People.jpg");
+	namedWindow("opencv", CV_WINDOW_NORMAL);
+	HOGDescriptor hog;
+	hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
+
+	vector<Rect> found, found_filtered;
+	hog.detectMultiScale(img, found, 0, Size(8, 8), Size(32, 32), 1.05, 2);
+	size_t i, j;
+	for (i = 0; i<found.size(); i++)
+	{
+		Rect r = found[i];
+		for (j = 0; j<found.size(); j++)
+			if (j != i && (r & found[j]) == r)
+				break;
+		if (j == found.size())
+			found_filtered.push_back(r);
+	}
+
+	for (i = 0; i<found_filtered.size(); i++)
+	{
+		Rect r = found_filtered[i];
+		r.x += cvRound(r.width*0.1);
+		r.width = cvRound(r.width*0.8);
+		r.y += cvRound(r.height*0.07);
+		r.height = cvRound(r.height*0.8);
+		rectangle(img, r.tl(), r.br(), Scalar(0, 255, 0), 3);
+	}
+
+	imshow("opencv", img);
+
+Human Detection In Video
+	VideoCapture cap("People.mp4");
+	cap.set(CV_CAP_PROP_FRAME_WIDTH, 320);
+	cap.set(CV_CAP_PROP_FRAME_HEIGHT, 240);
+	
+	Mat img;
+	HOGDescriptor hog;
+	hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
+
+	namedWindow("video capture", CV_WINDOW_NORMAL);
+	while (true)
+	{
+		cap >> img;
+		
+		vector<Rect> found, found_filtered;
+		hog.detectMultiScale(img, found, 0, Size(8, 8), Size(32, 32), 1.05, 2);
+
+		size_t i, j;
+		for (i = 0; i<found.size(); i++)
+		{
+			Rect r = found[i];
+			for (j = 0; j<found.size(); j++)
+				if (j != i && (r & found[j]) == r)
+					break;
+			if (j == found.size())
+				found_filtered.push_back(r);
+		}
+		for (i = 0; i<found_filtered.size(); i++)
+		{
+			Rect r = found_filtered[i];
+			r.x += cvRound(r.width*0.1);
+			r.width = cvRound(r.width*0.8);
+			r.y += cvRound(r.height*0.06);
+			r.height = cvRound(r.height*0.9);
+			rectangle(img, r.tl(), r.br(), cv::Scalar(0, 255, 0), 2);
+		}
+		imshow("video capture", img);
+		if (waitKey(20) >= 0)
+			break;
+	}
+
+

@@ -1,0 +1,4 @@
+﻿  Source.cpp
+d:\ai\project\project\source.cpp(23): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
+d:\ai\project\project\source.cpp(24): warning C4244: 'initializing': conversion from 'double' to 'int', possible loss of data
+  Project.vcxproj -> D:\AI\Project\x64\Debug\Project.exe

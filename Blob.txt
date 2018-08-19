@@ -1,0 +1,28 @@
+#include <opencv2/opencv.hpp>
+using namespace cv;
+using namespace std;
+int main()
+{
+	Mat imageT;
+	int posX, posY;
+	Mat image = imread("Test.jpg");
+	inRange(image, Scalar(254, 254, 254), Scalar(255, 255, 255), imageT);
+	
+	Moments oMoments = moments(imageT);
+
+	double dM01 = oMoments.m01;
+	double dM10 = oMoments.m10;
+	double dArea = oMoments.m00;
+	if (dArea > 100)
+	{
+		posX = dM10 / dArea;
+		posY = dM01 / dArea;
+	}
+	Rect border(posX - sqrt(dArea)*0.05, posY - sqrt(dArea)*0.05, sqrt(dArea)*0.1, sqrt(dArea)*0.1);
+	rectangle(imageT, border, Scalar(0, 255, 0), 2);
+	rectangle(image, border, Scalar(0, 255, 0), 2);
+	imshow("Test", image);
+	//imshow("TestT", imageT);
+	waitKey(0);
+	return 1;
+}

@@ -1,0 +1,193 @@
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/stitching.hpp>
+#include <iostream>
+#include <vector>
+
+using namespace std;
+using namespace cv;
+
+void edgeDetect(float xa, float ya, float xb, float yb, int *le, int *re)
+{
+	float mx, x, temp;
+	int i;
+	if ((yb - ya)<0)
+	{
+		temp = ya; ya = yb; yb = temp;
+		temp = xa; xa = xb; xb = temp;
+	}
+	if ((yb - ya) != 0)
+		mx = (xb - xa) / (yb - ya);
+	else
+		mx = xb - xa;
+	x = xa;
+	for (i = ya; i <= yb; i++)
+	{
+		if (x<(float)le[i])
+			le[i] = (int)x;
+		if (x>(float)re[i])
+			re[i] = (int)x;
+		x += mx;
+	}
+}
+
+int main()
+{
+	int a, b;
+	float x1 = 50, y1 = 50, x2 = 640, y2 = 50, x3 = 640, y3 = 450, x4 = 300, y4 = 450, x5 = 300, y5 = 300, x6 = 50, y6 = 300;
+	float X1 = 0, Y1 = 50, X2 = 350, Y2 = 50, X3 = 350, Y3 = 250, X4 = 500, Y4 = 250, X5 = 500, Y5 = 450, X6 = 0, Y6 = 450;
+
+	VideoCapture cap1("Human1.mp4");
+	VideoCapture cap2("HUman2.mp4");
+
+	cap1.set(CV_CAP_PROP_FRAME_WIDTH, 640);
+	cap1.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
+	cap2.set(CV_CAP_PROP_FRAME_WIDTH, 640);
+	cap2.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
+	VideoWriter video1("Output1.mp4", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(640, 480));
+	VideoWriter video2("Output2.mp4", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(640, 480));
+
+	HOGDescriptor hog;
+	hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
+	
+	int le1[640], re1[640], le2[640], re2[640];
+	int n, y;
+	for (n = 0; n<640; n++)
+	{
+		le1[n] = 640;
+		re1[n] = 0;
+	}
+	for (n = 0; n<640; n++)
+	{
+		le2[n] = 640;
+		re2[n] = 0;
+	}
+	edgeDetect(x1, y1, x2, y2, le1, re1);
+	edgeDetect(x2, y2, x3, y3, le1, re1);
+	edgeDetect(x3, y3, x4, y4, le1, re1);
+	edgeDetect(x4, y4, x5, y5, le1, re1);
+	edgeDetect(x5, y5, x6, y6, le1, re1);
+	edgeDetect(x6, y6, x1, y1, le1, re1);
+
+	edgeDetect(X1, Y1, X2, Y2, le2, re2);
+	edgeDetect(X2, Y2, X3, Y3, le2, re2);
+	edgeDetect(X3, Y3, X4, Y4, le2, re2);
+	edgeDetect(X4, Y4, X5, Y5, le2, re2);
+	edgeDetect(X5, Y5, X1, Y1, le2, re2);
+	edgeDetect(X5, Y5, X1, Y1, le2, re2);
+
+	while (1)
+	{
+		Mat img1, img2;
+		cap1 >> img1;
+		cap2 >> img2;
+		video1.write(img1);
+		video2.write(img2);
+		if (img1.empty() || img2.empty())
+			break;
+
+		vector<Rect> found1, found2, found_filtered1, found_filtered2, dups;
+		hog.detectMultiScale(img1, found1, 0, Size(8, 8), Size(32, 32), 1.2, 2);
+		hog.detectMultiScale(img2, found2, 0, Size(8, 8), Size(32, 32), 1.2, 2);
+		size_t i, j;
+
+		Scalar color = Scalar(0, 255, 0);
+
+		Mat imggray1, imggray2;
+		cvtColor(img1, imggray1, CV_BGR2GRAY);
+		cvtColor(img2, imggray2, CV_BGR2GRAY);
+		Ptr<FeatureDetector> detector = ORB::create();
+		vector<KeyPoint> keypointsPrev, keypointsNext;
+		detector->detect(img1, keypointsPrev);
+		detector->detect(img2, keypointsNext);
+
+		
+		Ptr<DescriptorExtractor> extractor = ORB::create();
+		Mat descriptorsPrev, descriptorsNext;
+		extractor->compute(imggray1, keypointsPrev, descriptorsPrev);
+		extractor->compute(imggray2, keypointsNext, descriptorsNext);
+
+		descriptorsPrev.convertTo(descriptorsPrev, CV_32F);
+		descriptorsNext.convertTo(descriptorsNext, CV_32F);
+
+		FlannBasedMatcher matcher;
+		vector<DMatch> matches;
+		matcher.match(descriptorsPrev, descriptorsNext, matches);
+
+		vector<DMatch> goodMatches;
+		int mindist = imggray1.rows / 100 * 15;
+		for (int i = 0; i < descriptorsPrev.rows; i++)
+		{
+			if (matches[i].distance < 3 * mindist)
+			{
+				goodMatches.push_back(matches[i]);
+			}
+		}
+
+		Mat result, resultimg;
+		int sumx1 = 0,sumx2 = 0;
+		for (int i = 0; i < goodMatches.size(); i++)
+		{
+			sumx1 = sumx1 + keypointsPrev[goodMatches[i].queryIdx].pt.x;
+			sumx2 = sumx2 + keypointsNext[goodMatches[i].trainIdx].pt.x;
+		}
+		if (goodMatches.size() != 0)
+		{
+			int avgx1 = sumx1 / goodMatches.size();
+			int avgx2 = sumx2 / goodMatches.size();
+			drawMatches(img1, keypointsPrev, img2, keypointsNext, goodMatches, result, Scalar(0, 255, 0), Scalar(255, 0, 0), vector<char>(), 0);
+			hconcat(img1, img2, resultimg);
+			line(resultimg, Point(avgx1, 0), Point(avgx1, 480), color, 2, 8, 0);
+			line(resultimg, Point(640 + avgx2, 0), Point(640 + avgx2, 480), color, 2, 8, 0);
+		}
+		else
+			continue;
+		
+		for (i = 0; i<found1.size(); i++)
+		{
+			Rect r = found1[i];
+			for (j = 0; j<found1.size(); j++)
+				if (j != i && (r & found1[j]) == r)
+					break;
+			if (j == found1.size())
+				found_filtered1.push_back(r);
+		}
+		for (i = 0; i < found_filtered1.size(); i++)
+		{
+			Rect r = found_filtered1[i];
+			a = r.x;
+			b = r.y;
+			if (le1[b]<re1[b] && a > le1[b] && a < re1[b])
+			{
+				r.x += cvRound(r.width*0.1);
+				r.width = cvRound(r.width*0.8);
+				r.y += cvRound(r.height*0.06);
+				r.height = cvRound(r.height*0.9);
+				rectangle(img1, r.tl(), r.br(), cv::Scalar(255, 0, 0), 2);
+			}
+		}
+		imshow("FeatureMatching", result);
+		imshow("Merge", resultimg);
+		
+		char ch = waitKey(10);
+		if (ch == 27)
+			break;
+	}
+	return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

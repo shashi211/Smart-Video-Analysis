@@ -1,0 +1,186 @@
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/stitching.hpp>
+#include <iostream>
+#include <vector>
+
+using namespace std;
+using namespace cv;
+
+void edgeDetect(float xa, float ya, float xb, float yb, int *le, int *re)
+{
+	float mx, x, temp;
+	int i;
+	if ((yb - ya)<0)
+	{
+		temp = ya; ya = yb; yb = temp;
+		temp = xa; xa = xb; xb = temp;
+	}
+	if ((yb - ya) != 0)
+		mx = (xb - xa) / (yb - ya);
+	else
+		mx = xb - xa;
+	x = xa;
+	for (i = ya; i <= yb; i++)
+	{
+		if (x<(float)le[i])
+			le[i] = (int)x;
+		if (x>(float)re[i])
+			re[i] = (int)x;
+		x += mx;
+	}
+}
+
+int main()
+{
+	int a, b;
+	float x1 = 50, y1 = 50, x2 = 990, y2 = 50, x3 = 990, y3 = 250, x4 = 1140, y4 = 250, x5 = 1140, y5 = 450, x6 = 200, y6 = 450, x7 = 200, y7 = 250, x8 = 50, y8 = 250;
+
+
+	VideoCapture cap1("Human1.mp4");
+	VideoCapture cap2("Human2.mp4");
+	cap1.set(CV_CAP_PROP_FRAME_WIDTH, 640);
+	cap1.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
+	cap2.set(CV_CAP_PROP_FRAME_WIDTH, 640);
+	cap2.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
+
+	HOGDescriptor hog;
+	hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
+
+	int le[1280], re[1280];
+	int n, y;
+	for (n = 0; n<480; n++)
+	{
+		le[n] = 1280;
+		re[n] = 0;
+	}
+
+	//edgeDetect(x1, y1, x2, y2, le, re);
+	//edgeDetect(x2, y2, x3, y3, le, re);
+	//edgeDetect(x3, y3, x4, y4, le, re);
+	//edgeDetect(x4, y4, x5, y5, le, re);
+	//edgeDetect(x5, y5, x6, y6, le, re);
+	//edgeDetect(x6, y6, x7, y7, le, re);
+	//edgeDetect(x7, y7, x8, y8, le, re);
+	//edgeDetect(x8, y8, x1, y1, le, re);
+
+	while (1)
+	{
+		Mat img1, img2;
+		cap1 >> img1;
+		cap2 >> img2;
+		if (img1.empty() || img2.empty())
+			break;
+
+		size_t i, j;
+		Scalar color = Scalar(0, 255, 0);
+
+		Mat imggray1, imggray2;
+		cvtColor(img1, imggray1, CV_BGR2GRAY);
+		cvtColor(img2, imggray2, CV_BGR2GRAY);
+		Ptr<FeatureDetector> detector = ORB::create();
+		vector<KeyPoint> keypointsPrev, keypointsNext;
+		detector->detect(img1, keypointsPrev);
+		detector->detect(img2, keypointsNext);
+
+
+		Ptr<DescriptorExtractor> extractor = ORB::create();
+		Mat descriptorsPrev, descriptorsNext;
+		extractor->compute(imggray1, keypointsPrev, descriptorsPrev);
+		extractor->compute(imggray2, keypointsNext, descriptorsNext);
+
+		descriptorsPrev.convertTo(descriptorsPrev, CV_32F);
+		descriptorsNext.convertTo(descriptorsNext, CV_32F);
+
+		FlannBasedMatcher matcher;
+		vector<DMatch> matches;
+		matcher.match(descriptorsPrev, descriptorsNext, matches);
+
+		vector<DMatch> goodMatches;
+		int mindist = imggray1.rows / 100 * 15;
+		for (int i = 0; i < descriptorsPrev.rows; i++)
+		{
+			if (matches[i].distance < 3 * mindist)
+			{
+				goodMatches.push_back(matches[i]);
+			}
+		}
+
+		Mat result, resultimg;
+		int sumx1 = 0, sumx2 = 0, avgx1, avgx2;
+		for (int i = 0; i < goodMatches.size(); i++)
+		{
+			sumx1 = sumx1 + keypointsPrev[goodMatches[i].queryIdx].pt.x;
+			sumx2 = sumx2 + keypointsNext[goodMatches[i].trainIdx].pt.x;
+		}
+		if (goodMatches.size() != 0)
+		{
+			avgx1 = sumx1 / goodMatches.size();
+			avgx2 = sumx2 / goodMatches.size();
+			drawMatches(img1, keypointsPrev, img2, keypointsNext, goodMatches, result, Scalar(0, 255, 0), Scalar(255, 0, 0), vector<char>(), 0);
+			hconcat(img1, img2, resultimg);
+			line(resultimg, Point(avgx1, 0), Point(avgx1, 480), Scalar(0, 0, 255), 2, 8, 0);
+			line(resultimg, Point(640 + avgx2, 0), Point(640 + avgx2, 480), Scalar(0, 0, 255), 2, 8, 0);
+		}
+		else
+			continue;
+
+		vector<Rect> found, found_filtered;
+		hog.detectMultiScale(resultimg, found, 0, Size(8, 8), Size(32, 32), 1.2, 2);
+
+		for (i = 0; i<found.size(); i++)
+		{
+			Rect r = found[i];
+			for (j = 0; j<found.size(); j++)
+				if (j != i && (r & found[j]) == r)
+					break;
+			if (j == found.size())
+				found_filtered.push_back(r);
+		}
+		for (i = 0; i < found_filtered.size(); i++)
+		{
+			Rect r = found_filtered[i];
+			a = r.x;
+			b = r.y;
+			//if (le[b]<re[b] && a > le[b] && a < re[b] && a < (avgx1 - r.width + 5) && a > avgx2)
+			{
+				r.x += cvRound(r.width*0.1);
+				r.width = cvRound(r.width*0.8);
+				r.y += cvRound(r.height*0.06);
+				r.height = cvRound(r.height*0.9);
+				rectangle(resultimg, r.tl(), r.br(), cv::Scalar(255, 0, 0), 2);
+			}
+		}
+		//line(resultimg, Point(x1, y1), Point(x2, y2), color, 2, 8, 0);
+		//line(resultimg, Point(x2, y2), Point(x3, y3), color, 2, 8, 0);
+		//line(resultimg, Point(x3, y3), Point(x4, y4), color, 2, 8, 0);
+		//line(resultimg, Point(x4, y4), Point(x5, y5), color, 2, 8, 0);
+		//line(resultimg, Point(x6, y6), Point(x5, y5), color, 2, 8, 0);
+		//line(resultimg, Point(x6, y6), Point(x7, y7), color, 2, 8, 0);
+		//line(resultimg, Point(x7, y7), Point(x8, y8), color, 2, 8, 0);
+		//line(resultimg, Point(x8, y8), Point(x1, y1), color, 2, 8, 0);
+		imshow("FeatureMatching", result);
+		imshow("Merge", resultimg);
+
+		char ch = waitKey(10);
+		if (ch == 27)
+			break;
+	}
+	return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

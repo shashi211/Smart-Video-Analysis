@@ -1,0 +1,45 @@
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/stitching.hpp>
+#include <iostream>
+#include <vector>
+
+using namespace std;
+using namespace cv;
+
+int main()
+{
+	VideoCapture cap1("1.h264");
+	VideoCapture cap2("2.h264");
+	//Mat img1 = imread("a.jpg");
+	//Mat img2 = imread("b.jpg");
+	
+	Mat img1, img2;
+	Mat pano;
+	vector<Mat> imgs;
+
+	Stitcher stitcher = Stitcher::createDefault(); // The value you entered here is the default
+	while (1)
+	{
+		cap1 >> img1;
+		cap2 >> img2;
+		imgs.push_back(img1);
+		imgs.push_back(img2);
+
+		Stitcher::Status status = stitcher.stitch(imgs, pano);
+
+		if (status != Stitcher::OK)
+		{
+			cout << "Error stitching - Code: " << int(status) << endl;
+			return -1;
+		}
+
+		//imshow("Frame 1", imgs[0]);
+		//imshow("Frame 2", imgs[1]);
+		imshow("Stitched Image", pano);
+		char ch=waitKey(1);
+		if (ch == 27)
+			break;
+	}
+	return 0;
+}

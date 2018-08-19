@@ -1,0 +1,29 @@
+#include <opencv2/opencv.hpp>
+using namespace cv;
+using namespace std;
+int main()
+{
+	VideoCapture cap(1);
+	cap.set(CAP_PROP_FRAME_WIDTH, 640);
+	cap.set(CAP_PROP_FRAME_HEIGHT, 480);
+	Mat image,imageT;
+	while (1)
+	{
+		cap >> image;
+		inRange(image, Scalar(0, 0, 0), Scalar(10, 10, 10), imageT);
+		Moments oMoments = moments(imageT);
+		double dM01 = oMoments.m01;
+		double dM10 = oMoments.m10;
+		double dArea = oMoments.m00;
+		if (dArea > 30000000)
+		{
+			Rect border(20,20,600,440);
+			rectangle(image, border, Scalar(0, 255, 0), 2);
+		}
+		imshow("Test", image);
+		char ch = waitKey(1);
+		if (ch == 27)
+			break;
+	}
+	return 1;
+}

@@ -1,0 +1,97 @@
+#include <opencv2/opencv.hpp>
+
+int main()
+{
+	using namespace cv;
+	using namespace std;
+	Mat frame, back, backz, fore, foreT, sub, imageT;
+	int posX = -1, posY = -1;
+	int pX,pY;
+	VideoCapture cap1("video1.avi");
+	Ptr<BackgroundSubtractorMOG2> bg = createBackgroundSubtractorMOG2();
+	bg->setNMixtures(10);
+		
+	vector < vector < Point > >contours;
+	namedWindow("Rectangle");
+	int flag = 0;
+	double t = getTickCount() / getTickFrequency();//for abandoned object
+	while (1)
+	{
+		cap1 >> frame;
+		if (frame.empty())
+			break;
+		bg->apply(frame, fore);
+		inRange(fore, Scalar(254, 254, 254), Scalar(255, 255, 255), foreT);
+		bg->getBackgroundImage(back);
+		findContours(foreT, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+		Mat out = frame.clone();
+
+		int interval;
+		if (flag == 0)
+		{
+			absdiff(back, back, backz);
+			interval = 60;
+			flag = 10;
+		}
+
+		if (flag == 10 && (getTickCount() / getTickFrequency() - t) >= 2)//this loop runs once
+		{
+			backz = back.clone();//extra loop run to ensure stable initial background
+			flag = 20;
+		}
+
+		if ((getTickCount() / getTickFrequency() - t) >= interval)//interval can vary from 0 to 10 minutes; infinite loop
+		{
+			backz = back.clone();//not backz=back as they'll become pointers pointing to same address
+			t = getTickCount() / (getTickFrequency());
+		}
+		if ((getTickCount() / getTickFrequency() - t) >= interval - 3)//interval can vary from 0 to 10 minutes; infinite loop
+		{
+			cout << "\a";//to produce a sound near new interval
+		}
+		absdiff(back, backz, sub);
+		threshold(sub, sub, 35, 255, THRESH_BINARY);
+		inRange(sub, Scalar(254, 254, 254), Scalar(255, 255, 255), imageT);
+		Moments oMoments = moments(imageT);
+
+		double dM01 = oMoments.m01;
+		double dM10 = oMoments.m10;
+		double dArea = oMoments.m00;
+		if (dArea > 100)
+		{
+			posX = dM10 / dArea;
+			posY = dM01 / dArea;
+		}
+		Rect border(posX - sqrt(dArea)*0.05, posY - sqrt(dArea)*0.05, sqrt(dArea)*0.1, sqrt(dArea)*0.1);
+		if (cv::waitKey(3) >= 10)
+			break;
+
+		Mat drawing = Mat::zeros(fore.size(), CV_8UC3);
+		drawing = out.clone();
+		Scalar color = Scalar(0, 255, 0);
+		vector<Rect> boundRect(contours.size()), newboundRect;
+
+		for (int i = 0; i < contours.size(); i++)
+		{
+			boundRect[i] = boundingRect(contours[i]);
+			if (boundRect[i].height > 50 && boundRect[i].width > 50)
+				newboundRect.push_back(boundRect[i]);
+		}
+
+		if (newboundRect.size() == 0)
+			rectangle(drawing, border, Scalar(255, 0, 0), 2);
+		for (int i = 0; i < newboundRect.size(); i++)
+		{
+			pX = newboundRect[i].x;
+			pY = newboundRect[i].y;
+			if (abs(posX - pX) > 120 && abs(posY - pY) > 120)
+				rectangle(drawing, border, Scalar(255, 0, 0), 2);
+		}
+		imshow("Abandoned Objects", sub);
+		imshow("Rectangle", drawing);
+		char c = (char)waitKey(10);
+		if (c == 27)
+			break;
+	}
+	return 1;
+}

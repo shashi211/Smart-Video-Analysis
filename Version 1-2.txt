@@ -1,0 +1,90 @@
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/stitching.hpp>
+#include <iostream>
+#include <vector>
+
+using namespace std;
+using namespace cv;
+
+int main()
+{
+	VideoCapture cap1(1);
+	VideoCapture cap2(2);
+
+	Stitcher stitcher = Stitcher::createDefault();
+
+	HOGDescriptor hog;
+	hog.setSVMDetector(HOGDescriptor::getDefaultPeopleDetector());
+	namedWindow("Vid1");
+	namedWindow("Vid2");
+	namedWindow("Panorama");
+
+	int frame_width = cap1.get(CV_CAP_PROP_FRAME_WIDTH);
+	int frame_height = cap1.get(CV_CAP_PROP_FRAME_HEIGHT);
+	VideoWriter video1("Output1.mp4", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(frame_width, frame_height));
+	VideoWriter video2("Output2.mp4", CV_FOURCC('M', 'J', 'P', 'G'), 10, Size(frame_width, frame_height));
+
+	while (1)
+	{
+		Mat img1, img2;
+		Mat pano;
+		vector<Mat> imgs;
+
+		cap1 >> img1;
+		cap2 >> img2;
+		if (img1.empty() || img2.empty())
+			break;
+
+		video1.write(img1);
+		video2.write(img2);
+		imgs.push_back(img1);
+		imgs.push_back(img2);
+		
+		Stitcher::Status status = stitcher.stitch(imgs, pano);
+
+		if (status != Stitcher::OK)
+		{
+			cout << "Error stitching - Code: " << int(status) << endl;
+			return -1;
+		}
+		int x = 100, y = 50, w = 700, h = 500;
+		Rect border(x, y, w, h);
+		rectangle(pano, border, Scalar(0, 255, 0), 2);
+
+		vector<Rect> found, found_filtered;
+		hog.detectMultiScale(pano, found, 0, Size(8, 8), Size(32, 32), 1.2, 2);
+		size_t i, j;
+		for (i = 0; i<found.size(); i++)
+		{
+			Rect r = found[i];
+			for (j = 0; j<found.size(); j++)
+				if (j != i && (r & found[j]) == r)
+					break;
+			if (j == found.size())
+				found_filtered.push_back(r);
+		}
+		for (i = 0; i < found_filtered.size(); i++)
+		{
+			Rect r = found_filtered[i];
+			if (r.x >= x && r.x <= (x + w) && r.y >= y && r.y <= (y + h))
+			{
+				r.x += cvRound(r.width*0.1);
+				r.width = cvRound(r.width*0.8);
+				r.y += cvRound(r.height*0.06);
+				r.height = cvRound(r.height*0.9);
+				rectangle(pano, r.tl(), r.br(), cv::Scalar(255, 0, 0), 2);
+			}
+		}
+		
+		imshow("Vid1", img1);
+		imshow("Vid2", img2);
+		imshow("Panorama", pano);
+		imgs.pop_back();
+		imgs.pop_back();
+		char ch = waitKey(1);
+		if (ch == 27)
+			break;
+	}
+	return 0;
+}
